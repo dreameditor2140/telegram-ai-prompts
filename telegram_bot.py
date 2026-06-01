@@ -128,6 +128,8 @@ for item in posts:
 
         post_count += 1
 
+         time.sleep(2)
+
         # CTA after every 4 posts
         if post_count % 4 == 0:
 
@@ -144,7 +146,7 @@ for item in posts:
 
             print("CTA Sent")
 
-        time.sleep(2)
+        time.sleep(5)
 
     except Exception as e:
         print("Error:", e)
