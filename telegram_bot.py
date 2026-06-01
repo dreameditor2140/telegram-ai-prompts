@@ -2,121 +2,163 @@ import json
 import requests
 import time
 import random
+import os
 
-BOT_TOKEN = "8730206290:AAG-5VW7cfsh0gPvElLjdq9B6KMnlsbQqk8"
-CHANNEL_ID = "-1003806372069"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 
-URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+PHOTO_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+MESSAGE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
+POSTS_PER_DAY = 10
+STATE_FILE = "state.json"
+
+# CTA Messages
+cta_list = [
+    """🔻🔻🔻👇👇👇🔻🔻🔻
+
+🔥 2000+ AI Image Prompts Ready
+
+Create scroll-stopping images in seconds
+No skills. No effort.
+
+👇 Try now
+https://play.google.com/store/apps/details?id=com.aipromptcollection.app
+""",
+
+    """🔻🔻🔻👇👇👇🔻🔻🔻
+
+⚡ Make Viral AI Images Fast
+
+2000+ ready prompts inside
+Just copy & generate
+
+👇 Download now
+https://play.google.com/store/apps/details?id=com.aipromptcollection.app
+""",
+
+    """🔻🔻🔻👇👇👇🔻🔻🔻
+
+𝟮𝟬𝟬𝟬+ 𝗡𝗲𝘄 𝗣𝗿𝗼𝗺𝗽𝘁𝘀 𝗨𝗽𝗹𝗼𝗮𝗱𝗲𝗱 𝗼𝗻 𝗢𝘂𝗿 𝗔𝗽𝗽 ✅
+
+Create viral AI images instantly
+
+👇 Download Now
+https://play.google.com/store/apps/details?id=com.aipromptcollection.app
+"""
+]
+
+# Load prompt data
 with open("data.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
 if isinstance(data, dict):
     data = [data]
 
+# Load state
+try:
+    with open(STATE_FILE, "r") as f:
+        state = json.load(f)
+        start_index = state.get("last_index", 0)
+except:
+    start_index = 0
+
+# Restart from beginning if completed
+if start_index >= len(data):
+    start_index = 0
+
+posts = data[start_index:start_index + POSTS_PER_DAY]
+
+print(f"Posting {len(posts)} prompts")
+print(f"Starting index: {start_index}")
+
 post_count = 0
 
-# 🔥 CTA LIST (random rotation)
-cta_list = [
-    """🔻🔻🔻👇👇👇🔻🔻🔻
-🔥 2000+ AI Image Prompts Ready
+for item in posts:
 
-Create scroll-stopping images in seconds  
-No skills. No effort.
-
-👇 Try now  
-https://play.google.com/store/apps/details?id=com.aipromptcollection.app""",
-
-    """🔻🔻🔻👇👇👇🔻🔻🔻
-⚡ Make Viral AI Images Fast
-
-2000+ ready prompts inside  
-Just copy & generate
-
-👇 Download now  
-https://play.google.com/store/apps/details?id=com.aipromptcollection.app""",
-
-    """🔻🔻🔻👇👇👇🔻🔻🔻
-𝟮𝟬𝟬𝟬+ 𝗡𝗲𝘄 𝗣𝗿𝗼𝗺𝗽𝘁𝘀 𝗨𝗽𝗹𝗼𝗮𝗱𝗲𝗱 𝗼𝗻 𝗢𝘂𝗿 𝗔𝗽𝗽 ✅
-
-Don’t miss out on the latest trending prompts  
-Create viral AI images instantly
-
-👇 Download Now  
-https://play.google.com/store/apps/details?id=com.aipromptcollection.app"""
-]
-
-PHOTO_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-MESSAGE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
-for i, item in enumerate(data):
     try:
         item_id = item.get("id", "")
         title = item.get("title", "")
         prompt = item.get("prompt", "")
         image_url = item.get("image_url", "")
-        category = item.get("category_name", "")
 
         if not image_url:
-            print(f"{i+1} Skipped: No image_url")
+            print(f"Skipped {item_id} - no image")
             continue
 
-        # 📸 Send Image
-        payload_photo = {
+        # Send Photo
+        photo_payload = {
             "chat_id": CHANNEL_ID,
             "photo": image_url,
-            "caption": title or "",
+            "caption": title,
             "parse_mode": "HTML"
         }
 
-        res1 = requests.post(PHOTO_URL, data=payload_photo)
+        photo_response = requests.post(
+            PHOTO_URL,
+            data=photo_payload,
+            timeout=30
+        )
 
-        if res1.status_code != 200:
-            print(f"{item_id} Image Failed:", res1.text)
+        if photo_response.status_code != 200:
+            print("Photo Failed:", photo_response.text)
             continue
 
-        print(f"{item_id} Posted Image")
+        print(f"Image Posted: {item_id}")
 
-        # 📝 Send Prompt
-        payload_text = {
+        time.sleep(2)
+
+        # Send Prompt
+        text_payload = {
             "chat_id": CHANNEL_ID,
             "text": prompt,
             "parse_mode": "HTML"
         }
 
-        res2 = requests.post(MESSAGE_URL, data=payload_text)
+        text_response = requests.post(
+            MESSAGE_URL,
+            data=text_payload,
+            timeout=30
+        )
 
-        if res2.status_code != 200:
-            print(f"{item_id} Caption Failed:", res2.text)
+        if text_response.status_code == 200:
+            print(f"Prompt Posted: {item_id}")
         else:
-            print(f"{item_id} Posted Caption")
+            print("Prompt Failed:", text_response.text)
 
         post_count += 1
 
-        # ⏱️ Normal delay
+        # CTA after every 4 posts
+        if post_count % 4 == 0:
+
+            cta = random.choice(cta_list)
+
+            requests.post(
+                MESSAGE_URL,
+                data={
+                    "chat_id": CHANNEL_ID,
+                    "text": cta
+                },
+                timeout=30
+            )
+
+            print("CTA Sent")
+
         time.sleep(2)
 
-        # 🛑 After every 8 posts → wait + send CTA
-        if post_count % 4 == 0:
-            print("⏸️ Waiting 5 seconds after 4 posts...")
-
-            random_cta = random.choice(cta_list)
-
-            payload_cta = {
-                "chat_id": CHANNEL_ID,
-                "text": random_cta,
-                "parse_mode": "HTML"
-            }
-
-            res3 = requests.post(MESSAGE_URL, data=payload_cta)
-
-            if res3.status_code != 200:
-                print("CTA Failed:", res3.text)
-            else:
-                print("CTA Sent Successfully")
-
-            time.sleep(5)
-
-
     except Exception as e:
-        print(f"{item_id} Error:", e)
+        print("Error:", e)
+
+# Save next position
+next_index = start_index + len(posts)
+
+with open(STATE_FILE, "w") as f:
+    json.dump(
+        {
+            "last_index": next_index
+        },
+        f
+    )
+
+print("Done")
+print("Next Start Index:", next_index)
