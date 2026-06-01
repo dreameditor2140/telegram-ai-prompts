@@ -1,0 +1,10 @@
+STATE_FILE = "state.json"
+
+try:
+    with open(STATE_FILE, "r") as f:
+        state = json.load(f)
+        start_index = state.get("last_index", 0)
+except:
+    start_index = 0
+
+posts = data[start_index:start_index + 10]
