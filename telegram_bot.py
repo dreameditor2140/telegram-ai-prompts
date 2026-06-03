@@ -7,13 +7,10 @@ import os
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 
-DATA_URL = "https://dreameditor2140.github.io/prompt/data.json"
-
 PHOTO_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
 MESSAGE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-POSTS_PER_DAY = 10
-STATE_FILE = "state.json"
+POSTS_PER_RUN = 10
 
 cta_list = [
     """🔻🔻🔻👇👇👇🔻🔻🔻
@@ -26,6 +23,7 @@ No skills. No effort.
 👇 Try now
 https://play.google.com/store/apps/details?id=com.aipromptcollection.app
 """,
+
     """🔻🔻🔻👇👇👇🔻🔻🔻
 
 ⚡ Make Viral AI Images Fast
@@ -36,6 +34,7 @@ Just copy & generate
 👇 Download now
 https://play.google.com/store/apps/details?id=com.aipromptcollection.app
 """,
+
     """🔻🔻🔻👇👇👇🔻🔻🔻
 
 𝟮𝟬𝟬𝟬+ 𝗡𝗲𝘄 𝗣𝗿𝗼𝗺𝗽𝘁𝘀 𝗨𝗽𝗹𝗼𝗮𝗱𝗲𝗱 𝗼𝗻 𝗢𝘂𝗿 𝗔𝗽𝗽 ✅
@@ -47,72 +46,25 @@ https://play.google.com/store/apps/details?id=com.aipromptcollection.app
 """
 ]
 
-# =========================
-# LOAD DATA FROM URL
-# =========================
+# Load data
+with open("data.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
 
-try:
-    response = requests.get(DATA_URL, timeout=60)
-    response.raise_for_status()
+if isinstance(data, dict):
+    data = [data]
 
-    data = response.json()
+if not data:
+    print("No prompts remaining.")
+    exit()
 
-    if isinstance(data, dict):
-        data = [data]
+# Take first 10 records
+posts = data[:POSTS_PER_RUN]
 
-    print(f"Loaded {len(data)} prompts")
+print(f"Loaded {len(data)} prompts")
+print(f"Posting {len(posts)} prompts")
 
-except Exception as e:
-    print(f"Failed to load data: {e}")
-    raise
-
-# =========================
-# LOAD STATE
-# =========================
-
-try:
-    with open(STATE_FILE, "r", encoding="utf-8") as f:
-        state = json.load(f)
-        last_uploaded_id = str(state.get("last_uploaded_id", ""))
-except:
-    last_uploaded_id = ""
-
-# =========================
-# FIND START INDEX
-# =========================
-
-start_index = 0
-
-if last_uploaded_id:
-    for i, item in enumerate(data):
-        if str(item.get("id")) == last_uploaded_id:
-            start_index = i + 1
-            break
-
-# If reached end, restart
-if start_index >= len(data):
-    start_index = 0
-
-# =========================
-# GET NEXT POSTS
-# =========================
-
-posts = data[start_index:start_index + POSTS_PER_DAY]
-
-# Continue from beginning if not enough items remain
-if len(posts) < POSTS_PER_DAY:
-    remaining = POSTS_PER_DAY - len(posts)
-    posts.extend(data[:remaining])
-
-print(f"Start Index: {start_index}")
-print(f"Posts To Send: {len(posts)}")
-
-# =========================
-# SEND POSTS
-# =========================
-
+successful_ids = []
 post_count = 0
-last_successful_id = None
 
 for item in posts:
     try:
@@ -126,16 +78,14 @@ for item in posts:
             continue
 
         # Send Image
-        photo_payload = {
-            "chat_id": CHANNEL_ID,
-            "photo": image_url,
-            "caption": title[:1024],
-            "parse_mode": "HTML"
-        }
-
         photo_response = requests.post(
             PHOTO_URL,
-            data=photo_payload,
+            data={
+                "chat_id": CHANNEL_ID,
+                "photo": image_url,
+                "caption": title[:1024],
+                "parse_mode": "HTML"
+            },
             timeout=60
         )
 
@@ -149,15 +99,13 @@ for item in posts:
         time.sleep(2)
 
         # Send Prompt
-        text_payload = {
-            "chat_id": CHANNEL_ID,
-            "text": prompt[:4096],
-            "parse_mode": "HTML"
-        }
-
         text_response = requests.post(
             MESSAGE_URL,
-            data=text_payload,
+            data={
+                "chat_id": CHANNEL_ID,
+                "text": prompt[:4096],
+                "parse_mode": "HTML"
+            },
             timeout=60
         )
 
@@ -168,7 +116,7 @@ for item in posts:
 
         print(f"Prompt Posted: {item_id}")
 
-        last_successful_id = item_id
+        successful_ids.append(item_id)
         post_count += 1
 
         # CTA after every 4 posts
@@ -186,28 +134,30 @@ for item in posts:
 
             if cta_response.status_code == 200:
                 print("CTA Sent")
-            else:
-                print("CTA Failed")
 
         time.sleep(5)
 
     except Exception as e:
         print(f"Error {item.get('id')}: {e}")
 
-# =========================
-# SAVE LAST ID
-# =========================
+# Remove uploaded records
+if successful_ids:
 
-if last_successful_id:
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
+    updated_data = [
+        item
+        for item in data
+        if str(item.get("id")) not in successful_ids
+    ]
+
+    with open("data.json", "w", encoding="utf-8") as f:
         json.dump(
-            {
-                "last_uploaded_id": last_successful_id
-            },
+            updated_data,
             f,
+            ensure_ascii=False,
             indent=4
         )
 
-    print(f"Saved last_uploaded_id: {last_successful_id}")
+    print(f"Removed {len(successful_ids)} uploaded prompts")
+    print(f"Remaining prompts: {len(updated_data)}")
 
 print("Done")
