@@ -7,6 +7,8 @@ import os
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 
+DATA_URL = "https://dreameditor2140.github.io/prompt/data.json"
+
 PHOTO_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
 MESSAGE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
@@ -45,14 +47,29 @@ https://play.google.com/store/apps/details?id=com.aipromptcollection.app
 """
 ]
 
-# Load data
-with open("data.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
+# =========================
+# LOAD DATA FROM URL
+# =========================
 
-if isinstance(data, dict):
-    data = [data]
+try:
+    response = requests.get(DATA_URL, timeout=60)
+    response.raise_for_status()
 
-# Load last uploaded ID
+    data = response.json()
+
+    if isinstance(data, dict):
+        data = [data]
+
+    print(f"Loaded {len(data)} prompts")
+
+except Exception as e:
+    print(f"Failed to load data: {e}")
+    raise
+
+# =========================
+# LOAD STATE
+# =========================
+
 try:
     with open(STATE_FILE, "r", encoding="utf-8") as f:
         state = json.load(f)
@@ -60,7 +77,10 @@ try:
 except:
     last_uploaded_id = ""
 
-# Find start position
+# =========================
+# FIND START INDEX
+# =========================
+
 start_index = 0
 
 if last_uploaded_id:
@@ -69,20 +89,27 @@ if last_uploaded_id:
             start_index = i + 1
             break
 
-# Restart from beginning if end reached
+# If reached end, restart
 if start_index >= len(data):
     start_index = 0
 
-# Get next posts
+# =========================
+# GET NEXT POSTS
+# =========================
+
 posts = data[start_index:start_index + POSTS_PER_DAY]
 
-# If less than 10 remain, continue from beginning
+# Continue from beginning if not enough items remain
 if len(posts) < POSTS_PER_DAY:
     remaining = POSTS_PER_DAY - len(posts)
     posts.extend(data[:remaining])
 
-print(f"Starting Index: {start_index}")
-print(f"Posting {len(posts)} prompts")
+print(f"Start Index: {start_index}")
+print(f"Posts To Send: {len(posts)}")
+
+# =========================
+# SEND POSTS
+# =========================
 
 post_count = 0
 last_successful_id = None
@@ -98,7 +125,7 @@ for item in posts:
             print(f"Skipped {item_id} - No image")
             continue
 
-        # Send image
+        # Send Image
         photo_payload = {
             "chat_id": CHANNEL_ID,
             "photo": image_url,
@@ -109,18 +136,19 @@ for item in posts:
         photo_response = requests.post(
             PHOTO_URL,
             data=photo_payload,
-            timeout=30
+            timeout=60
         )
 
         if photo_response.status_code != 200:
-            print(f"Image Failed {item_id}: {photo_response.text}")
+            print(f"Image Failed {item_id}")
+            print(photo_response.text)
             continue
 
         print(f"Image Posted: {item_id}")
 
         time.sleep(2)
 
-        # Send prompt
+        # Send Prompt
         text_payload = {
             "chat_id": CHANNEL_ID,
             "text": prompt[:4096],
@@ -130,11 +158,12 @@ for item in posts:
         text_response = requests.post(
             MESSAGE_URL,
             data=text_payload,
-            timeout=30
+            timeout=60
         )
 
         if text_response.status_code != 200:
-            print(f"Prompt Failed {item_id}: {text_response.text}")
+            print(f"Prompt Failed {item_id}")
+            print(text_response.text)
             continue
 
         print(f"Prompt Posted: {item_id}")
@@ -146,23 +175,29 @@ for item in posts:
         if post_count % 4 == 0:
             cta = random.choice(cta_list)
 
-            requests.post(
+            cta_response = requests.post(
                 MESSAGE_URL,
                 data={
                     "chat_id": CHANNEL_ID,
                     "text": cta
                 },
-                timeout=30
+                timeout=60
             )
 
-            print("CTA Sent")
+            if cta_response.status_code == 200:
+                print("CTA Sent")
+            else:
+                print("CTA Failed")
 
         time.sleep(5)
 
     except Exception as e:
         print(f"Error {item.get('id')}: {e}")
 
-# Save last uploaded ID
+# =========================
+# SAVE LAST ID
+# =========================
+
 if last_successful_id:
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(
