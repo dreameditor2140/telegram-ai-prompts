@@ -10,8 +10,6 @@ CHANNEL_ID = os.getenv("CHANNEL_ID")
 PHOTO_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
 MESSAGE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-POSTS_PER_RUN = 10
-
 cta_list = [
     """🔻🔻🔻👇👇👇🔻🔻🔻
 
@@ -57,8 +55,8 @@ if not data:
     print("No prompts remaining.")
     exit()
 
-# Take first 10 records
-posts = data[:POSTS_PER_RUN]
+# Process all records
+posts = data
 
 print(f"Loaded {len(data)} prompts")
 print(f"Posting {len(posts)} prompts")
@@ -90,7 +88,7 @@ for item in posts:
         )
 
         if photo_response.status_code != 200:
-            print(f"Image Failed {item_id}")
+            print(f"Image Failed: {item_id}")
             print(photo_response.text)
             continue
 
@@ -110,7 +108,7 @@ for item in posts:
         )
 
         if text_response.status_code != 200:
-            print(f"Prompt Failed {item_id}")
+            print(f"Prompt Failed: {item_id}")
             print(text_response.text)
             continue
 
@@ -134,6 +132,8 @@ for item in posts:
 
             if cta_response.status_code == 200:
                 print("CTA Sent")
+            else:
+                print("CTA Failed")
 
         time.sleep(5)
 
@@ -142,7 +142,6 @@ for item in posts:
 
 # Remove uploaded records
 if successful_ids:
-
     updated_data = [
         item
         for item in data
